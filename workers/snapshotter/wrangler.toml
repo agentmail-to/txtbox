@@ -1,0 +1,25 @@
+name = "txtbox-snapshotter"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# --- Dev environment ---
+[env.dev]
+name = "txtbox-snapshotter-dev"
+
+[[env.dev.r2_buckets]]
+binding = "SNAPSHOTS_BUCKET"
+bucket_name = "txtbox-snapshots-dev"
+
+[env.dev.triggers]
+crons = ["*/5 * * * *"]
+
+# --- Prod environment ---
+[env.prod]
+name = "txtbox-snapshotter-prod"
+
+[[env.prod.r2_buckets]]
+binding = "SNAPSHOTS_BUCKET"
+bucket_name = "txtbox-snapshots-prod"
+
+[env.prod.triggers]
+crons = ["*/5 * * * *"]

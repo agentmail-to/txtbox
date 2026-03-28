@@ -1,0 +1,35 @@
+name = "txtbox-api-session"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# --- Dev environment ---
+[env.dev]
+name = "txtbox-api-session-dev"
+
+[[env.dev.routes]]
+pattern = "api.txtbox.dev"
+custom_domain = true
+
+[[env.dev.ratelimits]]
+name = "SESSION_LIMITER"
+namespace_id = "2001"
+
+  [env.dev.ratelimits.simple]
+  limit = 20
+  period = 60
+
+# --- Prod environment ---
+[env.prod]
+name = "txtbox-api-session-prod"
+
+[[env.prod.routes]]
+pattern = "api.txt.box"
+custom_domain = true
+
+[[env.prod.ratelimits]]
+name = "SESSION_LIMITER"
+namespace_id = "1001"
+
+  [env.prod.ratelimits.simple]
+  limit = 20
+  period = 60

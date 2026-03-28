@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>txt.box</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <textarea id="editor" placeholder="Start typing..." autofocus></textarea>
+    <footer id="bar">
+      <div id="counters">
+        <span id="chars">0 chars</span>
+        <span id="words">0 words</span>
+        <span id="lines">0 lines</span>
+        <span id="tokens">0 tokens</span>
+      </div>
+      <div id="actions">
+        <span id="status"></span>
+        <button id="new-doc" type="button">New</button>
+      </div>
+    </footer>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
