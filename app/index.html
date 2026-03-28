@@ -7,8 +7,21 @@
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
+    <header id="topbar">
+      <div id="url-group">
+        <a id="url-host" href="/">txt.box</a><span id="url-slug"></span>
+        <button id="copy-url" type="button" aria-label="Copy URL">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
+      <div id="actions">
+        <span id="status"></span>
+        <button id="share-doc" type="button" class="hidden">Share</button>
+        <button id="new-doc" type="button" class="hidden">New</button>
+      </div>
+    </header>
     <textarea id="editor" placeholder="Start typing..." autofocus></textarea>
-    <footer id="bar">
+    <footer id="bottombar">
       <div id="counters">
         <span id="chars">0 <span class="label">chars</span></span>
         <span id="tokens">0 <span class="label">tokens</span></span>
@@ -18,11 +31,6 @@
       <div id="credits">
         <span>Sponsored by <a href="https://agentmail.to" target="_blank" rel="noopener">agentmail.to</a></span>
         <span>Powered by <a href="https://s2.dev" target="_blank" rel="noopener">s2.dev</a></span>
-      </div>
-      <div id="actions">
-        <span id="status"></span>
-        <button id="share-doc" type="button" class="hidden">Share</button>
-        <button id="new-doc" type="button" class="hidden">New</button>
       </div>
     </footer>
     <script type="module" src="/src/main.ts"></script>
