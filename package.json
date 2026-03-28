@@ -1,7 +1,13 @@
 {
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter app dev",
-    "build": "pnpm --filter app build"
+    "dev": "pnpm --parallel --filter './app' --filter './workers/*' dev",
+    "dev:app": "pnpm --filter @txtbox/app dev",
+    "dev:api": "pnpm --filter @txtbox/api-session dev",
+    "dev:snap": "pnpm --filter @txtbox/snapshotter dev",
+    "build": "pnpm --filter @txtbox/app build",
+    "deploy:dev": "pnpm --parallel --filter './app' --filter './workers/*' deploy:dev",
+    "deploy:prod": "pnpm --parallel --filter './app' --filter './workers/*' deploy:prod",
+    "typecheck": "pnpm -r --parallel exec tsc --noEmit"
   }
 }
