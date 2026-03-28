@@ -108,32 +108,32 @@ export async function startSync(
 
   let readSess: ReadSession<"bytes"> | null = null;
   let tailActive = true;
+  let nextReadSeqNum = session.snapshotSeqNum;
 
   const startTail = async () => {
-    try {
-      readSess = await stream.readSession(
-        {
-          start: { from: { seqNum: session.snapshotSeqNum }, clamp: true },
-        },
-        { as: "bytes" }
-      );
-      for await (const rec of readSess) {
-        if (!tailActive) break;
-        applyRecord(doc, rec.body);
-      }
-    } catch (e) {
-      if (e instanceof RangeNotSatisfiableError) {
-        console.warn("read position trimmed, restarting from tail");
+    while (tailActive) {
+      try {
         readSess = await stream.readSession(
-          { start: { from: { tailOffset: 0 }, clamp: true } },
-          { as: "bytes" }
+          {
+            start: { from: { seqNum: nextReadSeqNum }, clamp: true },
+            stop: { waitSecs: 30 },
+          },
+          { as: "bytes" },
         );
         for await (const rec of readSess) {
           if (!tailActive) break;
+          nextReadSeqNum = rec.seqNum + 1;
           applyRecord(doc, rec.body);
         }
-      } else {
-        console.error("read session failed:", e);
+      } catch (e) {
+        if (!tailActive) break;
+        if (e instanceof RangeNotSatisfiableError) {
+          console.warn("read position trimmed, restarting from tail");
+          nextReadSeqNum = 0;
+          continue;
+        }
+        console.error("read session error, retrying:", e);
+        await new Promise((r) => setTimeout(r, 2000));
       }
     }
   };
