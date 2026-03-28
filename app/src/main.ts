@@ -13,6 +13,7 @@ const shareBtn = document.getElementById("share-doc")!;
 const urlHost = document.getElementById("url-host")!;
 const urlSlug = document.getElementById("url-slug")!;
 const copyBtn = document.getElementById("copy-url") as HTMLButtonElement;
+const copyIcon = document.getElementById("copy-icon")!;
 
 const updateCounters = setupCounters({
   chars: document.getElementById("chars")!,
@@ -25,15 +26,18 @@ newDocBtn.addEventListener("click", () => {
   window.location.href = `/${generateDocId()}`;
 });
 
-copyBtn.addEventListener("click", async () => {
+const ICON_COPY = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+const ICON_CHECK = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
+async function copyUrl() {
   try {
     await navigator.clipboard.writeText(window.location.href);
-    copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-    setTimeout(() => {
-      copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
-    }, 1500);
+    copyIcon.innerHTML = ICON_CHECK;
+    setTimeout(() => { copyIcon.innerHTML = ICON_COPY; }, 1500);
   } catch { /* clipboard not available */ }
-});
+}
+
+copyBtn.addEventListener("click", copyUrl);
 
 const docId = getDocIdFromUrl();
 

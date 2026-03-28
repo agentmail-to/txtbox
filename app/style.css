@@ -102,14 +102,11 @@ body {
 #url-group {
   display: flex;
   align-items: center;
+  font-size: 12px;
 }
 
-#copy-url {
-  margin-left: 6px;
-}
 
 #url-host {
-  font-size: 12px;
   color: var(--accent);
   text-decoration: none;
   padding: 4px 0;
@@ -120,33 +117,36 @@ body {
 }
 
 #url-slug {
-  font-size: 12px;
-  color: var(--accent);
-  opacity: 0.6;
   padding: 4px 0;
 }
 
 #copy-url {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 6px;
   background: none;
   border: none;
   color: var(--accent);
   cursor: pointer;
-  padding: 2px;
+  padding: 2px 2px 2px 0;
   border-radius: 3px;
-  transition: background 0.15s;
+  transition: opacity 0.15s;
   opacity: 0.6;
+  font: inherit;
+  font-size: 12px;
+}
+
+#copy-icon {
+  display: flex;
+  align-items: center;
+}
+
+#copy-url:hover {
+  opacity: 1;
 }
 
 #copy-url.hidden {
   display: none;
-}
-
-#copy-url:hover {
-  background: var(--btn-bg);
-  opacity: 1;
 }
 
 #actions {
