@@ -8,14 +8,13 @@ import { STREAM_NAME_PREFIX } from "./constants.js";
 const S2_ACCOUNT_ENDPOINT = "https://aws.s2.dev";
 
 export class S2Client {
-  private basin: string;
+  readonly endpoint: string;
 
   constructor(
-    private basinEndpoint: string,
+    private basin: string,
     private token: string,
   ) {
-    const host = new URL(basinEndpoint).hostname;
-    this.basin = host.split(".")[0];
+    this.endpoint = `https://${basin}.b.aws.s2.dev`;
   }
 
   private headers(extra?: Record<string, string>): Record<string, string> {
@@ -29,7 +28,7 @@ export class S2Client {
   private url(
     path: string,
     params?: Record<string, string>,
-    base = this.basinEndpoint,
+    base = this.endpoint,
   ): string {
     const u = new URL(path, base);
     if (params) {

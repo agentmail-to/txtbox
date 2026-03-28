@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "deploy:dev": "tsc && vite build --mode dev && wrangler pages deploy dist --project-name txtbox-app-dev",
+    "deploy:prod": "tsc && vite build --mode prod && wrangler pages deploy dist --project-name txtbox-app-prod",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -12,6 +14,7 @@
   },
   "devDependencies": {
     "typescript": "^5.7.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "wrangler": "^4.0.0"
   }
 }

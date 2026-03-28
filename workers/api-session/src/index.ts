@@ -10,7 +10,7 @@ import {
 
 interface Env {
   S2_ACCESS_TOKEN: string;
-  S2_ENDPOINT: string;
+  S2_BASIN: string;
   R2_PUBLIC_BASE: string;
   SESSION_LIMITER: RateLimit;
 }
@@ -60,7 +60,7 @@ async function handleSession(request: Request, env: Env): Promise<Response> {
     return json({ error: "rate limited" }, 429);
   }
 
-  const s2 = new S2Client(env.S2_ENDPOINT, env.S2_ACCESS_TOKEN);
+  const s2 = new S2Client(env.S2_BASIN, env.S2_ACCESS_TOKEN);
   const streamName = `${STREAM_NAME_PREFIX}${docId}`;
 
   await s2.ensureStream(streamName);
@@ -80,7 +80,7 @@ async function handleSession(request: Request, env: Env): Promise<Response> {
   return json({
     docId,
     stream: streamName,
-    s2Endpoint: env.S2_ENDPOINT,
+    s2Endpoint: s2.endpoint,
     s2Token,
     snapshotUrl: snapshot.url,
     snapshotSeqNum: snapshot.seqNum,

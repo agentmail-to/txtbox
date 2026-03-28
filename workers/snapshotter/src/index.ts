@@ -10,7 +10,7 @@ import type { SnapshotMarker } from "@txtbox/shared";
 
 interface Env {
   S2_ACCESS_TOKEN: string;
-  S2_ENDPOINT: string;
+  S2_BASIN: string;
   SNAPSHOTS_BUCKET: R2Bucket;
 }
 
@@ -21,7 +21,7 @@ export default {
 };
 
 async function snapshotActiveDocs(env: Env): Promise<void> {
-  const s2 = new S2Client(env.S2_ENDPOINT, env.S2_ACCESS_TOKEN);
+  const s2 = new S2Client(env.S2_BASIN, env.S2_ACCESS_TOKEN);
   const cutoff = Date.now() - ACTIVE_DOC_WINDOW_MIN * 60 * 1000;
 
   let startAfter: string | undefined;

@@ -3,16 +3,15 @@
 Cloud-synced text editor with conflict-free realtime collaboration.
 
 - **Frontend**: Vite + vanilla TypeScript, plain `<textarea>`, Yjs CRDT
+- **Hosting**: Cloudflare Pages
 - **Backend**: Cloudflare Workers (api-session + snapshotter)
 - **Storage**: S2 streams (one per doc) + R2 snapshots
-- **Infra**: Pulumi (Cloudflare provider)
 
 ## Prerequisites
 
 - Node.js >= 20
 - pnpm
-- Pulumi CLI
-- Wrangler CLI (>= 4.36.0)
+- Wrangler CLI (>= 4.0)
 - S2 account with separate dev/prod basins + access tokens
 - Cloudflare account with `txt.box` and `txtbox.dev` domains
 
@@ -28,38 +27,28 @@ Dev and prod are fully isolated -- separate worker scripts, R2 buckets, S2 basin
 
 | Resource | Dev | Prod |
 |---|---|---|
+| Pages project | `txtbox` (dev branch) | `txtbox` (main branch) |
+| Domain | `txtbox.dev` | `txt.box` |
 | API worker | `txtbox-api-session-dev` | `txtbox-api-session-prod` |
+| API domain | `api.txtbox.dev` | `api.txt.box` |
 | Snapshotter | `txtbox-snapshotter-dev` | `txtbox-snapshotter-prod` |
 | R2 bucket | `txtbox-snapshots-dev` | `txtbox-snapshots-prod` |
-| Domain | `txtbox.dev` | `txt.box` |
-| API domain | `api.txtbox.dev` | `api.txt.box` |
-| Snapshots domain | `snapshots.txtbox.dev` | `snapshots.txt.box` |
-| S2 basin | separate | separate |
+| S2 basin | `txtbox-dev` | `txtbox-prod` |
 
 ## Configuration
 
-All config is managed through Pulumi (single source of truth). Each stack has its own config:
+Non-secret vars (`S2_BASIN`, `R2_PUBLIC_BASE`) are in `wrangler.toml` per environment. Only the S2 access token is a secret:
 
 ```bash
-cd infra
+# api-session
+cd workers/api-session
+wrangler secret put S2_ACCESS_TOKEN --env dev
+wrangler secret put S2_ACCESS_TOKEN --env prod
 
-# Dev stack
-pulumi stack init dev
-pulumi config set account_id "YOUR_CLOUDFLARE_ACCOUNT_ID"
-pulumi config set zone_id "ZONE_ID_FOR_TXTBOX_DEV"
-pulumi config set domain "txtbox.dev"
-pulumi config set s2_endpoint "https://txtbox-dev.b.aws.s2.dev"
-pulumi config set --secret s2_access_token "s2_..."
-pulumi config set --secret cloudflare:apiToken "YOUR_CF_API_TOKEN"
-
-# Prod stack
-pulumi stack init prod
-pulumi config set account_id "YOUR_CLOUDFLARE_ACCOUNT_ID"
-pulumi config set zone_id "ZONE_ID_FOR_TXT_BOX"
-pulumi config set domain "txt.box"
-pulumi config set s2_endpoint "https://txtbox-prod.b.aws.s2.dev"
-pulumi config set --secret s2_access_token "s2_..."
-pulumi config set --secret cloudflare:apiToken "YOUR_CF_API_TOKEN"
+# snapshotter
+cd workers/snapshotter
+wrangler secret put S2_ACCESS_TOKEN --env dev
+wrangler secret put S2_ACCESS_TOKEN --env prod
 ```
 
 For local development, copy the `.dev.vars.example` files:
@@ -67,7 +56,7 @@ For local development, copy the `.dev.vars.example` files:
 ```bash
 cp workers/api-session/.dev.vars.example workers/api-session/.dev.vars
 cp workers/snapshotter/.dev.vars.example workers/snapshotter/.dev.vars
-# Then edit .dev.vars with your actual values
+# Then edit .dev.vars with your S2 access token
 ```
 
 ## Development
@@ -85,17 +74,19 @@ cd workers/snapshotter && pnpm dev
 
 ```bash
 # Dev
+cd app && pnpm deploy:dev
 cd workers/api-session && pnpm deploy:dev
 cd workers/snapshotter && pnpm deploy:dev
-cd infra && pulumi stack select dev && pulumi up
 
 # Prod
+cd app && pnpm deploy:prod
 cd workers/api-session && pnpm deploy:prod
 cd workers/snapshotter && pnpm deploy:prod
-cd infra && pulumi stack select prod && pulumi up
 ```
 
-Workers must be deployed before `pulumi up` (Pulumi pushes secrets to existing scripts).
+R2 buckets are auto-provisioned by wrangler on first deploy. Custom domains need to be set up once in the Cloudflare dashboard:
+- Pages: `txt.box` on production, `txtbox.dev` on the dev branch
+- R2: `snapshots.txt.box` and `snapshots.txtbox.dev`
 
 ## Architecture
 

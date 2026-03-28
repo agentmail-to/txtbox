@@ -1,9 +1,0 @@
-config:
-  txtbox:account_id: bd7c35be5b6e9ac403d2dc9bc92ce4a5
-  txtbox:zone_id: 72687439e4935a7628c9d3539d80209c
-  txtbox:domain: txt.box
-  txtbox:s2_endpoint: https://txtbox-prod.b.aws.s2.dev
-  txtbox:s2_access_token:
-    secure: AAABAHpJEdb7TeILP3oJFfgbTqCsAUi1rEiEzccIvychzFCU0QWUMu8d4xFxkun43s86TDD5in1QzVHPxr5FbTJufr/8W2WTSJJAG+XjdaQ=
-  cloudflare:apiToken:
-    secure: AAABAOk0eeUG+AHR6AawnJ6O4rL4Uz1xNMPSC+otB6tMWwDnyEBdBTHLLiCAJG0hOlPzBkt1WpY/OlBegC/N1E8EDFZFGO/uCIxX885Zc4VUYfivBg==

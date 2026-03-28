@@ -1,6 +1,0 @@
-name: txtbox
-runtime:
-  name: nodejs
-  options:
-    typescript: true
-description: Cloudflare infrastructure for txt.box

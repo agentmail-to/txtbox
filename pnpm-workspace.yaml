@@ -1,5 +1,4 @@
 packages:
   - app
   - workers/*
-  - infra
   - shared

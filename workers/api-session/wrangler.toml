@@ -6,6 +6,10 @@ compatibility_date = "2024-12-01"
 [env.dev]
 name = "txtbox-api-session-dev"
 
+[env.dev.vars]
+S2_BASIN = "txtbox-dev"
+R2_PUBLIC_BASE = "https://snapshots.txtbox.dev"
+
 [[env.dev.routes]]
 pattern = "api.txtbox.dev"
 custom_domain = true
@@ -21,6 +25,10 @@ namespace_id = "2001"
 # --- Prod environment ---
 [env.prod]
 name = "txtbox-api-session-prod"
+
+[env.prod.vars]
+S2_BASIN = "txtbox-prod"
+R2_PUBLIC_BASE = "https://snapshots.txt.box"
 
 [[env.prod.routes]]
 pattern = "api.txt.box"

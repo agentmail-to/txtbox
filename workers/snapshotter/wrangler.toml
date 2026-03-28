@@ -6,6 +6,9 @@ compatibility_date = "2024-12-01"
 [env.dev]
 name = "txtbox-snapshotter-dev"
 
+[env.dev.vars]
+S2_BASIN = "txtbox-dev"
+
 [[env.dev.r2_buckets]]
 binding = "SNAPSHOTS_BUCKET"
 bucket_name = "txtbox-snapshots-dev"
@@ -16,6 +19,9 @@ crons = ["*/5 * * * *"]
 # --- Prod environment ---
 [env.prod]
 name = "txtbox-snapshotter-prod"
+
+[env.prod.vars]
+S2_BASIN = "txtbox-prod"
 
 [[env.prod.r2_buckets]]
 binding = "SNAPSHOTS_BUCKET"
