@@ -1,5 +1,7 @@
 import * as Y from "yjs";
-import type { SessionResponse, S2ReadBatch } from "../../shared/types";
+import { S2, AppendInput, AppendRecord } from "@s2-dev/streamstore";
+import type { S2Stream } from "@s2-dev/streamstore";
+import type { SessionResponse } from "../../shared/types";
 import {
   FLUSH_DEBOUNCE_MS,
   MAX_BATCH_BYTES,
@@ -24,7 +26,9 @@ export async function startSync(
   const doc = new Y.Doc();
   const text = doc.getText("content");
 
-  // Load snapshot if available
+  const s2 = new S2({ accessToken: session.s2Token });
+  const stream = s2.basin(session.s2Basin).stream(session.stream);
+
   if (session.snapshotUrl) {
     try {
       const res = await fetch(session.snapshotUrl);
@@ -37,10 +41,9 @@ export async function startSync(
     }
   }
 
-  // Replay all records from the stream after the snapshot
   let nextSeqNum = session.snapshotSeqNum;
   try {
-    nextSeqNum = await catchUp(session, doc, nextSeqNum);
+    nextSeqNum = await catchUp(stream, doc, nextSeqNum);
   } catch (e) {
     console.warn("catch-up failed, will retry via poll:", e);
   }
@@ -81,20 +84,11 @@ export async function startSync(
   async function sendRecords(updates: Uint8Array[], original: Uint8Array[]) {
     onStatus("Saving...");
     try {
-      const records = updates.map((u) => ({ body: uint8ToBase64(u) }));
-      const res = await fetch(
-        `${session.s2Endpoint}/v1/streams/${encodeURIComponent(session.stream)}/records`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.s2Token}`,
-            "Content-Type": "application/json",
-            "s2-format": "base64",
-          },
-          body: JSON.stringify({ records }),
-        },
+      await stream.append(
+        AppendInput.create(
+          updates.map((u) => AppendRecord.bytes({ body: u })),
+        ),
       );
-      if (!res.ok) throw new Error(`append: ${res.status}`);
       consecutiveFailures = 0;
       onStatus("Saved");
     } catch {
@@ -122,7 +116,6 @@ export async function startSync(
     }
   }
 
-  // Queue local Yjs updates for S2 append
   doc.on("update", (update: Uint8Array, origin: unknown) => {
     if (origin === "remote") return;
     if (docTooLarge) return;
@@ -139,7 +132,6 @@ export async function startSync(
     }
   });
 
-  // When Yjs text changes (local or remote), sync to textarea
   text.observe(() => {
     const newVal = text.toString();
     onTextChange(newVal);
@@ -151,7 +143,6 @@ export async function startSync(
     textarea.selectionEnd = selectionEnd;
   });
 
-  // When the user types, diff against Yjs and apply minimal operations
   textarea.addEventListener("input", () => {
     const newVal = textarea.value;
     const oldVal = text.toString();
@@ -164,17 +155,15 @@ export async function startSync(
     suppressLocal = false;
   });
 
-  // Insert initial text after handlers are attached so the update gets queued for S2
   if (initialText && text.length === 0) {
     doc.transact(() => { text.insert(0, initialText); });
   }
 
-  // Poll for remote updates
   let pollActive = true;
   const poll = async () => {
     while (pollActive) {
       try {
-        nextSeqNum = await readNewRecords(session, doc, nextSeqNum);
+        nextSeqNum = await readNewRecords(stream, doc, nextSeqNum);
       } catch {
         // poll error, retry next cycle
       }
@@ -194,74 +183,61 @@ export async function startSync(
   };
 }
 
-/** Read all records from seqNum to the current tail, apply Yjs updates. */
 async function catchUp(
-  session: SessionResponse,
+  stream: S2Stream,
   doc: Y.Doc,
   fromSeqNum: number,
 ): Promise<number> {
   let seqNum = fromSeqNum;
-  let hasMore = true;
-  while (hasMore) {
-    const batch = await readBatch(session, seqNum, 1000);
-    hasMore = batch.records.length > 0;
+  while (true) {
+    const batch = await stream.read(
+      {
+        start: { from: { seqNum } },
+        stop: { limits: { count: 1000 } },
+      },
+      { as: "bytes" },
+    );
+    if (batch.records.length === 0) break;
     for (const rec of batch.records) {
-      seqNum = rec.seq_num + 1;
+      seqNum = rec.seqNum + 1;
       applyRecord(doc, rec.body);
     }
+    if (batch.records.length < 1000) break;
   }
   return seqNum;
 }
 
-/** Read new records from seqNum, apply Yjs updates, return new seqNum. */
 async function readNewRecords(
-  session: SessionResponse,
+  stream: S2Stream,
   doc: Y.Doc,
   fromSeqNum: number,
 ): Promise<number> {
-  const batch = await readBatch(session, fromSeqNum, 100);
+  const batch = await stream.read(
+    {
+      start: { from: { seqNum: fromSeqNum } },
+      stop: { limits: { count: 100 } },
+    },
+    { as: "bytes" },
+  );
   let seqNum = fromSeqNum;
   for (const rec of batch.records) {
-    seqNum = rec.seq_num + 1;
+    seqNum = rec.seqNum + 1;
     applyRecord(doc, rec.body);
   }
   return seqNum;
 }
 
-async function readBatch(
-  session: SessionResponse,
-  seqNum: number,
-  count: number,
-): Promise<S2ReadBatch> {
-  const res = await fetch(
-    `${session.s2Endpoint}/v1/streams/${encodeURIComponent(session.stream)}/records?seq_num=${seqNum}&count=${count}`,
-    {
-      headers: {
-        Authorization: `Bearer ${session.s2Token}`,
-        "s2-format": "base64",
-      },
-    },
-  );
-  if (!res.ok) throw new Error(`read: ${res.status}`);
-  return res.json() as Promise<S2ReadBatch>;
-}
-
-function applyRecord(doc: Y.Doc, body: string | undefined) {
-  if (!body) return;
-  // Skip snapshot markers (JSON records)
+function applyRecord(doc: Y.Doc, body: Uint8Array) {
+  if (!body || body.length === 0) return;
   try {
-    JSON.parse(body);
-    return;
+    JSON.parse(new TextDecoder().decode(body));
+    return; // snapshot marker, skip
   } catch {
-    // binary Yjs update encoded as base64
+    // binary Yjs update
   }
-  Y.applyUpdate(doc, base64ToUint8(body), "remote");
+  Y.applyUpdate(doc, body, "remote");
 }
 
-/**
- * Compute minimal diff between old and new strings,
- * then apply targeted Yjs text operations.
- */
 function applyDiff(ytext: Y.Text, oldVal: string, newVal: string) {
   let start = 0;
   const minLen = Math.min(oldVal.length, newVal.length);
@@ -283,23 +259,6 @@ function applyDiff(ytext: Y.Text, oldVal: string, newVal: string) {
 
   if (deleteCount > 0) ytext.delete(start, deleteCount);
   if (insertText) ytext.insert(start, insertText);
-}
-
-function uint8ToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-function base64ToUint8(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }
 
 function sleep(ms: number): Promise<void> {

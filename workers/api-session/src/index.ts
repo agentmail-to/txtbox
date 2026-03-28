@@ -1,5 +1,6 @@
+import { S2, S2Error } from "@s2-dev/streamstore";
+import type { S2Stream } from "@s2-dev/streamstore";
 import {
-  S2Client,
   STREAM_NAME_PREFIX,
   DOC_ID_PATTERN,
   DOC_ID_MAX_LENGTH,
@@ -7,6 +8,7 @@ import {
   MAX_OPS_PER_SEC,
   SNAPSHOT_KEY_PREFIX,
 } from "@txtbox/shared";
+import type { SnapshotMarker } from "@txtbox/shared";
 
 interface Env {
   S2_ACCESS_TOKEN: string;
@@ -60,27 +62,35 @@ async function handleSession(request: Request, env: Env): Promise<Response> {
     return json({ error: "rate limited" }, 429);
   }
 
-  const s2 = new S2Client(env.S2_BASIN, env.S2_ACCESS_TOKEN);
+  const s2 = new S2({ accessToken: env.S2_ACCESS_TOKEN });
+  const basin = s2.basin(env.S2_BASIN);
   const streamName = `${STREAM_NAME_PREFIX}${docId}`;
 
-  await s2.ensureStream(streamName);
+  try {
+    await basin.streams.create({ stream: streamName });
+  } catch (e) {
+    if (!(e instanceof S2Error && e.status === 409)) throw e;
+  }
 
-  const expiresAt = new Date(
-    Date.now() + TOKEN_TTL_SECONDS * 1000
-  ).toISOString();
+  const expiresAt = new Date(Date.now() + TOKEN_TTL_SECONDS * 1000);
   const tokenId = `session/${docId}/${Date.now()}`;
-  const s2Token = await s2.issueToken(tokenId, streamName, expiresAt, [
-    "read",
-    "append",
-    "check-tail",
-  ]);
+  const { accessToken: s2Token } = await s2.accessTokens.issue({
+    id: tokenId,
+    expiresAt,
+    scope: {
+      basins: { exact: env.S2_BASIN },
+      streams: { exact: streamName },
+      ops: ["read", "append", "check-tail"],
+    },
+  });
 
-  const snapshot = await findLatestSnapshot(s2, streamName, env);
+  const stream = basin.stream(streamName);
+  const snapshot = await findLatestSnapshot(stream, env);
 
   return json({
     docId,
     stream: streamName,
-    s2Endpoint: s2.endpoint,
+    s2Basin: env.S2_BASIN,
     s2Token,
     snapshotUrl: snapshot.url,
     snapshotSeqNum: snapshot.seqNum,
@@ -92,20 +102,21 @@ async function handleSession(request: Request, env: Env): Promise<Response> {
 }
 
 async function findLatestSnapshot(
-  s2: S2Client,
-  streamName: string,
+  stream: S2Stream,
   env: Env,
 ): Promise<{ url: string | null; seqNum: number }> {
   try {
-    const batch = await s2.readRecords(streamName, {
-      tailOffset: 50,
-      format: "raw",
-    });
+    const batch = await stream.read(
+      { start: { from: { tailOffset: 50 } } },
+      { as: "bytes" },
+    );
     for (let i = batch.records.length - 1; i >= 0; i--) {
       const rec = batch.records[i];
-      if (!rec.body) continue;
+      if (!rec.body || rec.body.length === 0) continue;
       try {
-        const parsed = JSON.parse(rec.body);
+        const parsed: SnapshotMarker = JSON.parse(
+          new TextDecoder().decode(rec.body),
+        );
         if (parsed.type === "snapshot" && parsed.key) {
           return {
             url: `${env.R2_PUBLIC_BASE}/${parsed.key}`,

@@ -8,6 +8,7 @@
     "deploy:prod": "wrangler deploy --env prod"
   },
   "dependencies": {
+    "@s2-dev/streamstore": "^0.22.8",
     "@txtbox/shared": "workspace:*",
     "yjs": "^13.6.0"
   },
