@@ -128,8 +128,6 @@ body {
   border: none;
   color: var(--accent);
   cursor: pointer;
-  padding: 2px 2px 2px 0;
-  border-radius: 3px;
   transition: opacity 0.15s;
   opacity: 0.6;
   font: inherit;
