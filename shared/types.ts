@@ -4,6 +4,7 @@ export interface SessionResponse {
   s2Endpoint: string;
   s2Token: string;
   snapshotUrl: string | null;
+  snapshotSeqNum: number;
   limits: {
     maxRecordBytes: number;
     maxOpsPerSec: number;

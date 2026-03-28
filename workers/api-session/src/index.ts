@@ -75,14 +75,15 @@ async function handleSession(request: Request, env: Env): Promise<Response> {
     "check-tail",
   ]);
 
-  const snapshotUrl = await findLatestSnapshotUrl(s2, streamName, env);
+  const snapshot = await findLatestSnapshot(s2, streamName, env);
 
   return json({
     docId,
     stream: streamName,
     s2Endpoint: env.S2_ENDPOINT,
     s2Token,
-    snapshotUrl,
+    snapshotUrl: snapshot.url,
+    snapshotSeqNum: snapshot.seqNum,
     limits: {
       maxRecordBytes: MAX_RECORD_BYTES,
       maxOpsPerSec: MAX_OPS_PER_SEC,
@@ -90,11 +91,11 @@ async function handleSession(request: Request, env: Env): Promise<Response> {
   });
 }
 
-async function findLatestSnapshotUrl(
+async function findLatestSnapshot(
   s2: S2Client,
   streamName: string,
-  env: Env
-): Promise<string | null> {
+  env: Env,
+): Promise<{ url: string | null; seqNum: number }> {
   try {
     const batch = await s2.readRecords(streamName, {
       tailOffset: 50,
@@ -106,7 +107,10 @@ async function findLatestSnapshotUrl(
       try {
         const parsed = JSON.parse(rec.body);
         if (parsed.type === "snapshot" && parsed.key) {
-          return `${env.R2_PUBLIC_BASE}/${parsed.key}`;
+          return {
+            url: `${env.R2_PUBLIC_BASE}/${parsed.key}`,
+            seqNum: parsed.seqNum ?? 0,
+          };
         }
       } catch {
         // binary Yjs record, skip
@@ -115,7 +119,7 @@ async function findLatestSnapshotUrl(
   } catch {
     // stream may be empty or not exist yet
   }
-  return null;
+  return { url: null, seqNum: 0 };
 }
 
 function json(data: unknown, status = 200): Response {
