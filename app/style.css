@@ -74,7 +74,8 @@ body {
   opacity: 0.7;
 }
 
-#new-doc {
+#new-doc,
+#share-doc {
   background: var(--btn-bg);
   color: var(--fg);
   border: 1px solid var(--bar-border);
@@ -86,6 +87,11 @@ body {
   transition: background 0.15s;
 }
 
-#new-doc:hover {
+#new-doc:hover,
+#share-doc:hover {
   background: var(--btn-hover);
+}
+
+.hidden {
+  display: none;
 }

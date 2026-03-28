@@ -19,6 +19,7 @@ export async function startSync(
   textarea: HTMLTextAreaElement,
   onStatus: (status: string) => void,
   onTextChange: (text: string) => void,
+  initialText?: string,
 ): Promise<SyncState> {
   const doc = new Y.Doc();
   const text = doc.getText("content");
@@ -162,6 +163,11 @@ export async function startSync(
     });
     suppressLocal = false;
   });
+
+  // Insert initial text after handlers are attached so the update gets queued for S2
+  if (initialText && text.length === 0) {
+    doc.transact(() => { text.insert(0, initialText); });
+  }
 
   // Poll for remote updates
   let pollActive = true;
