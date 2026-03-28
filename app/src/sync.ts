@@ -3,6 +3,7 @@ import {
   S2,
   AppendRecord,
   BatchTransform,
+  Producer,
   RangeNotSatisfiableError,
 } from "@s2-dev/streamstore";
 import type { ReadSession } from "@s2-dev/streamstore";
@@ -41,37 +42,28 @@ export async function startSync(
   }
 
   const appendSess = await stream.appendSession();
-  const batcher = new BatchTransform({
-    lingerDurationMillis: FLUSH_DEBOUNCE_MS,
-  });
-  const batchWriter = batcher.writable.getWriter();
-  const pipePromise = batcher.readable.pipeTo(appendSess.writable);
-  pipePromise.catch(() => {});
+  const producer = new Producer(
+    new BatchTransform({ lingerDurationMillis: FLUSH_DEBOUNCE_MS }),
+    appendSess,
+  );
 
   let suppressLocal = false;
   let docTooLarge = false;
-  let hasPending = false;
+  let pendingCount = 0;
 
-  const ackLoop = async () => {
-    try {
-      for await (const _ack of appendSess.acks()) {
-        hasPending = false;
-        onStatus("Saved");
-      }
-    } catch {
-      const cause = appendSess.failureCause();
-      if (cause) console.error("append session failed:", cause);
-    }
-  };
-  ackLoop();
-
-  doc.on("update", (update: Uint8Array, origin: unknown) => {
+  doc.on("update", async (update: Uint8Array, origin: unknown) => {
     if (origin === "remote" || docTooLarge) return;
-    if (!hasPending) {
-      hasPending = true;
-      onStatus("Saving...");
+    pendingCount++;
+    onStatus("Saving...");
+    try {
+      const ticket = await producer.submit(AppendRecord.bytes({ body: update }));
+      await ticket.ack();
+    } catch {
+      onStatus("Offline");
+      return;
     }
-    batchWriter.write(AppendRecord.bytes({ body: update })).catch(() => {});
+    pendingCount--;
+    if (pendingCount === 0) onStatus("Saved");
   });
 
   text.observe(() => {
@@ -157,8 +149,7 @@ export async function startSync(
     destroy() {
       tailActive = false;
       readSess?.cancel().catch(() => {});
-      batchWriter.close().catch(() => {});
-      appendSess.close().catch(() => {});
+      producer.close().catch(() => {});
       stream.close().catch(() => {});
       doc.destroy();
     },
