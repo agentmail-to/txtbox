@@ -45,15 +45,14 @@ body {
   left: 0;
   right: 0;
   min-height: 36px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   padding: 6px 16px;
   background: var(--bar-bg);
   border-top: 1px solid var(--bar-border);
   font-size: 12px;
   color: var(--accent);
-  flex-wrap: wrap;
   gap: 4px;
 }
 
@@ -63,9 +62,31 @@ body {
   flex-wrap: wrap;
 }
 
+#credits {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  opacity: 0.5;
+  justify-self: center;
+}
+
+#counters .label {
+  opacity: 0.5;
+}
+
+#credits a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+#credits a:hover {
+  text-decoration: underline;
+}
+
 #actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
 }
 

@@ -12,9 +12,9 @@ export function setupCounters(elements: CounterElements) {
     const lines = text === "" ? 0 : text.split("\n").length;
     const tokens = Math.ceil(chars / 4);
 
-    elements.chars.textContent = `${chars} chars`;
-    elements.words.textContent = `${words} words`;
-    elements.lines.textContent = `${lines} lines`;
-    elements.tokens.textContent = `${tokens} tokens`;
+    elements.chars.innerHTML = `${chars} <span class="label">chars</span>`;
+    elements.words.innerHTML = `${words} <span class="label">words</span>`;
+    elements.lines.innerHTML = `${lines} <span class="label">lines</span>`;
+    elements.tokens.innerHTML = `${tokens} <span class="label">tokens</span>`;
   };
 }
