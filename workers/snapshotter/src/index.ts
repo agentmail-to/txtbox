@@ -119,9 +119,8 @@ async function snapshotDoc(
       : { etagDoesNotMatch: "*" },
   };
 
-  try {
-    await env.SNAPSHOTS_BUCKET.put(key, snapshot, putOptions);
-  } catch {
+  const result = await env.SNAPSHOTS_BUCKET.put(key, snapshot, putOptions);
+  if (!result) {
     console.warn(`${streamName}: R2 precondition failed, another worker won the race`);
     doc.destroy();
     return;

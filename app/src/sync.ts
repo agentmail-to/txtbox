@@ -30,14 +30,12 @@ export async function startSync(
   const stream = s2.basin(session.s2Basin).stream(session.stream);
 
   if (session.snapshotUrl) {
-    try {
-      const res = await fetch(session.snapshotUrl);
-      if (res.ok) {
-        const buf = await res.arrayBuffer();
-        Y.applyUpdate(doc, new Uint8Array(buf), "remote");
-      }
-    } catch {
-      // no snapshot, start empty
+    const res = await fetch(session.snapshotUrl);
+    if (res.ok) {
+      const buf = await res.arrayBuffer();
+      Y.applyUpdate(doc, new Uint8Array(buf), "remote");
+    } else {
+      throw new Error(`snapshot fetch failed: ${res.status}`);
     }
   }
 
