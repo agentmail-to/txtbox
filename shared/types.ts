@@ -10,10 +10,3 @@ export interface SessionResponse {
     maxOpsPerSec: number;
   };
 }
-
-export interface SnapshotMarker {
-  type: "snapshot";
-  key: string;
-  ts: number;
-  seqNum: number;
-}

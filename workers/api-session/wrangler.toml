@@ -10,6 +10,10 @@ name = "txtbox-api-session-dev"
 S2_BASIN = "txtbox-dev"
 R2_PUBLIC_BASE = "https://snapshots.txtbox.dev"
 
+[[env.dev.r2_buckets]]
+binding = "SNAPSHOTS_BUCKET"
+bucket_name = "txtbox-snapshots-dev"
+
 [[env.dev.routes]]
 pattern = "api.txtbox.dev"
 custom_domain = true
@@ -29,6 +33,10 @@ name = "txtbox-api-session-prod"
 [env.prod.vars]
 S2_BASIN = "txtbox-prod"
 R2_PUBLIC_BASE = "https://snapshots.txt.box"
+
+[[env.prod.r2_buckets]]
+binding = "SNAPSHOTS_BUCKET"
+bucket_name = "txtbox-snapshots-prod"
 
 [[env.prod.routes]]
 pattern = "api.txt.box"

@@ -6,9 +6,10 @@ export const SNAPSHOT_KEY_PREFIX = "snapshots/";
 export const STREAM_NAME_PREFIX = "doc:";
 export const DOC_ID_MAX_LENGTH = 64;
 export const DOC_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
-export const MAX_DOC_BYTES = 5 * 1024 * 1024; // 5 MB
-export const MAX_SNAPSHOT_BYTES = 10 * 1024 * 1024; // 10 MB
+export const MAX_DOC_BYTES = 5 * 1024 * 1024;
+export const MAX_SNAPSHOT_BYTES = 10 * 1024 * 1024;
 export const FLUSH_DEBOUNCE_MS = 200;
-export const MAX_BATCH_BYTES = MAX_RECORD_BYTES;
-export const BACKOFF_BASE_MS = 1000;
-export const BACKOFF_MAX_MS = 30_000;
+
+export function snapshotKey(docId: string): string {
+  return `${SNAPSHOT_KEY_PREFIX}${docId}/latest.bin`;
+}

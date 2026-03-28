@@ -1,19 +1,18 @@
-import { S2, S2Error } from "@s2-dev/streamstore";
-import type { S2Stream } from "@s2-dev/streamstore";
+import { S2 } from "@s2-dev/streamstore";
 import {
   STREAM_NAME_PREFIX,
   DOC_ID_PATTERN,
   DOC_ID_MAX_LENGTH,
   MAX_RECORD_BYTES,
   MAX_OPS_PER_SEC,
-  SNAPSHOT_KEY_PREFIX,
+  snapshotKey,
 } from "@txtbox/shared";
-import type { SnapshotMarker } from "@txtbox/shared";
 
 interface Env {
   S2_ACCESS_TOKEN: string;
   S2_BASIN: string;
   R2_PUBLIC_BASE: string;
+  SNAPSHOTS_BUCKET: R2Bucket;
   SESSION_LIMITER: RateLimit;
 }
 
@@ -63,14 +62,7 @@ async function handleSession(request: Request, env: Env): Promise<Response> {
   }
 
   const s2 = new S2({ accessToken: env.S2_ACCESS_TOKEN });
-  const basin = s2.basin(env.S2_BASIN);
   const streamName = `${STREAM_NAME_PREFIX}${docId}`;
-
-  try {
-    await basin.streams.create({ stream: streamName });
-  } catch (e) {
-    if (!(e instanceof S2Error && e.status === 409)) throw e;
-  }
 
   const expiresAt = new Date(Date.now() + TOKEN_TTL_SECONDS * 1000);
   const tokenId = `session/${docId}/${Date.now()}`;
@@ -84,8 +76,7 @@ async function handleSession(request: Request, env: Env): Promise<Response> {
     },
   });
 
-  const stream = basin.stream(streamName);
-  const snapshot = await findLatestSnapshot(stream, env);
+  const snapshot = await findLatestSnapshot(docId, env);
 
   return json({
     docId,
@@ -102,35 +93,18 @@ async function handleSession(request: Request, env: Env): Promise<Response> {
 }
 
 async function findLatestSnapshot(
-  stream: S2Stream,
+  docId: string,
   env: Env,
 ): Promise<{ url: string | null; seqNum: number }> {
-  try {
-    const batch = await stream.read(
-      { start: { from: { tailOffset: 50 } } },
-      { as: "bytes" },
-    );
-    for (let i = batch.records.length - 1; i >= 0; i--) {
-      const rec = batch.records[i];
-      if (!rec.body || rec.body.length === 0) continue;
-      try {
-        const parsed: SnapshotMarker = JSON.parse(
-          new TextDecoder().decode(rec.body),
-        );
-        if (parsed.type === "snapshot" && parsed.key) {
-          return {
-            url: `${env.R2_PUBLIC_BASE}/${parsed.key}`,
-            seqNum: parsed.seqNum ?? 0,
-          };
-        }
-      } catch {
-        // binary Yjs record, skip
-      }
-    }
-  } catch {
-    // stream may be empty or not exist yet
-  }
-  return { url: null, seqNum: 0 };
+  const key = snapshotKey(docId);
+  const head = await env.SNAPSHOTS_BUCKET.head(key);
+  if (!head) return { url: null, seqNum: 0 };
+
+  const seqNum = parseInt(head.customMetadata?.lastSeqNum ?? "0", 10);
+  return {
+    url: `${env.R2_PUBLIC_BASE}/${key}`,
+    seqNum,
+  };
 }
 
 function json(data: unknown, status = 200): Response {

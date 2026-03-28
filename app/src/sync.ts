@@ -1,14 +1,13 @@
 import * as Y from "yjs";
-import { S2, AppendInput, AppendRecord } from "@s2-dev/streamstore";
-import type { S2Stream } from "@s2-dev/streamstore";
-import type { SessionResponse } from "../../shared/types";
 import {
-  FLUSH_DEBOUNCE_MS,
-  MAX_BATCH_BYTES,
-  MAX_DOC_BYTES,
-  BACKOFF_BASE_MS,
-  BACKOFF_MAX_MS,
-} from "../../shared/constants";
+  S2,
+  AppendRecord,
+  BatchTransform,
+  RangeNotSatisfiableError,
+} from "@s2-dev/streamstore";
+import type { ReadSession } from "@s2-dev/streamstore";
+import type { SessionResponse } from "../../shared/types";
+import { FLUSH_DEBOUNCE_MS, MAX_DOC_BYTES } from "../../shared/constants";
 
 export interface SyncState {
   doc: Y.Doc;
@@ -21,7 +20,7 @@ export async function startSync(
   textarea: HTMLTextAreaElement,
   onStatus: (status: string) => void,
   onTextChange: (text: string) => void,
-  initialText?: string,
+  initialText?: string
 ): Promise<SyncState> {
   const doc = new Y.Doc();
   const text = doc.getText("content");
@@ -41,95 +40,38 @@ export async function startSync(
     }
   }
 
-  let nextSeqNum = session.snapshotSeqNum;
-  try {
-    nextSeqNum = await catchUp(stream, doc, nextSeqNum);
-  } catch (e) {
-    console.warn("catch-up failed, will retry via poll:", e);
-  }
+  const appendSess = await stream.appendSession();
+  const batcher = new BatchTransform({
+    lingerDurationMillis: FLUSH_DEBOUNCE_MS,
+  });
+  const batchWriter = batcher.writable.getWriter();
+  const pipePromise = batcher.readable.pipeTo(appendSess.writable);
+  pipePromise.catch(() => {});
 
-  textarea.value = text.toString();
-  onTextChange(text.toString());
-
-  let pendingUpdates: Uint8Array[] = [];
-  let pendingBytes = 0;
-  let flushTimeout: ReturnType<typeof setTimeout> | null = null;
   let suppressLocal = false;
-  let consecutiveFailures = 0;
   let docTooLarge = false;
+  let hasPending = false;
 
-  const flushUpdates = async () => {
-    flushTimeout = null;
-    if (pendingUpdates.length === 0) return;
-
-    const toSend = pendingUpdates;
-    const toSendBytes = pendingBytes;
-    pendingUpdates = [];
-    pendingBytes = 0;
-
-    if (toSendBytes > MAX_BATCH_BYTES) {
-      const merged = Y.mergeUpdates(toSend);
-      if (merged.byteLength > MAX_BATCH_BYTES) {
-        onStatus("Update too large");
-        pendingUpdates = [...toSend, ...pendingUpdates];
-        pendingBytes = toSendBytes + pendingBytes;
-        return;
-      }
-      return sendRecords([merged], toSend);
-    }
-
-    return sendRecords(toSend, toSend);
-  };
-
-  async function sendRecords(updates: Uint8Array[], original: Uint8Array[]) {
-    onStatus("Saving...");
+  const ackLoop = async () => {
     try {
-      await stream.append(
-        AppendInput.create(
-          updates.map((u) => AppendRecord.bytes({ body: u })),
-        ),
-      );
-      consecutiveFailures = 0;
-      onStatus("Saved");
+      for await (const _ack of appendSess.acks()) {
+        hasPending = false;
+        onStatus("Saved");
+      }
     } catch {
-      consecutiveFailures++;
-      const delay = Math.min(
-        BACKOFF_BASE_MS * 2 ** consecutiveFailures,
-        BACKOFF_MAX_MS,
-      );
-      onStatus(`Retrying in ${Math.round(delay / 1000)}s...`);
-      pendingUpdates = [...original, ...pendingUpdates];
-      pendingBytes += original.reduce((s, u) => s + u.byteLength, 0);
-      flushTimeout = setTimeout(flushUpdates, delay);
+      const cause = appendSess.failureCause();
+      if (cause) console.error("append session failed:", cause);
     }
-  }
-
-  function checkDocSize() {
-    const size = new TextEncoder().encode(text.toString()).byteLength;
-    if (size > MAX_DOC_BYTES && !docTooLarge) {
-      docTooLarge = true;
-      onStatus("Doc too large");
-      textarea.setAttribute("readonly", "");
-    } else if (size <= MAX_DOC_BYTES && docTooLarge) {
-      docTooLarge = false;
-      textarea.removeAttribute("readonly");
-    }
-  }
+  };
+  ackLoop();
 
   doc.on("update", (update: Uint8Array, origin: unknown) => {
-    if (origin === "remote") return;
-    if (docTooLarge) return;
-
-    pendingUpdates.push(update);
-    pendingBytes += update.byteLength;
-
-    if (pendingBytes >= MAX_BATCH_BYTES) {
-      if (flushTimeout) clearTimeout(flushTimeout);
-      flushUpdates();
-    } else {
-      if (flushTimeout) clearTimeout(flushTimeout);
-      flushTimeout = setTimeout(flushUpdates, FLUSH_DEBOUNCE_MS);
+    if (origin === "remote" || docTooLarge) return;
+    if (!hasPending) {
+      hasPending = true;
+      onStatus("Saving...");
     }
+    batchWriter.write(AppendRecord.bytes({ body: update })).catch(() => {});
   });
 
   text.observe(() => {
@@ -156,82 +98,79 @@ export async function startSync(
   });
 
   if (initialText && text.length === 0) {
-    doc.transact(() => { text.insert(0, initialText); });
+    doc.transact(() => {
+      text.insert(0, initialText);
+    });
   }
 
-  let pollActive = true;
-  const poll = async () => {
-    while (pollActive) {
-      try {
-        nextSeqNum = await readNewRecords(stream, doc, nextSeqNum);
-      } catch {
-        // poll error, retry next cycle
+  textarea.value = text.toString();
+  onTextChange(text.toString());
+
+  let readSess: ReadSession<"bytes"> | null = null;
+  let tailActive = true;
+
+  const startTail = async () => {
+    try {
+      readSess = await stream.readSession(
+        {
+          start: { from: { seqNum: session.snapshotSeqNum }, clamp: true },
+        },
+        { as: "bytes" }
+      );
+      for await (const rec of readSess) {
+        if (!tailActive) break;
+        applyRecord(doc, rec.body);
       }
-      await sleep(1000);
+    } catch (e) {
+      if (e instanceof RangeNotSatisfiableError) {
+        console.warn("read position trimmed, restarting from tail");
+        readSess = await stream.readSession(
+          { start: { from: { tailOffset: 0 }, clamp: true } },
+          { as: "bytes" }
+        );
+        for await (const rec of readSess) {
+          if (!tailActive) break;
+          applyRecord(doc, rec.body);
+        }
+      } else {
+        console.error("read session failed:", e);
+      }
     }
   };
-  poll();
+  startTail();
+
+  function checkDocSize() {
+    const size = new TextEncoder().encode(text.toString()).byteLength;
+    if (size > MAX_DOC_BYTES && !docTooLarge) {
+      docTooLarge = true;
+      onStatus("Doc too large");
+      textarea.setAttribute("readonly", "");
+    } else if (size <= MAX_DOC_BYTES && docTooLarge) {
+      docTooLarge = false;
+      textarea.removeAttribute("readonly");
+    }
+  }
 
   return {
     doc,
     text,
     destroy() {
-      pollActive = false;
-      if (flushTimeout) clearTimeout(flushTimeout);
+      tailActive = false;
+      readSess?.cancel().catch(() => {});
+      batchWriter.close().catch(() => {});
+      appendSess.close().catch(() => {});
+      stream.close().catch(() => {});
       doc.destroy();
     },
   };
 }
 
-async function catchUp(
-  stream: S2Stream,
-  doc: Y.Doc,
-  fromSeqNum: number,
-): Promise<number> {
-  let seqNum = fromSeqNum;
-  while (true) {
-    const batch = await stream.read(
-      {
-        start: { from: { seqNum } },
-        stop: { limits: { count: 1000 } },
-      },
-      { as: "bytes" },
-    );
-    if (batch.records.length === 0) break;
-    for (const rec of batch.records) {
-      seqNum = rec.seqNum + 1;
-      applyRecord(doc, rec.body);
-    }
-    if (batch.records.length < 1000) break;
-  }
-  return seqNum;
-}
-
-async function readNewRecords(
-  stream: S2Stream,
-  doc: Y.Doc,
-  fromSeqNum: number,
-): Promise<number> {
-  const batch = await stream.read(
-    {
-      start: { from: { seqNum: fromSeqNum } },
-      stop: { limits: { count: 100 } },
-    },
-    { as: "bytes" },
-  );
-  let seqNum = fromSeqNum;
-  for (const rec of batch.records) {
-    seqNum = rec.seqNum + 1;
-    applyRecord(doc, rec.body);
-  }
-  return seqNum;
-}
-
 function applyRecord(doc: Y.Doc, body: Uint8Array) {
   if (!body || body.length === 0) return;
+  // Legacy: skip old JSON snapshot markers still in the stream
   try {
     JSON.parse(new TextDecoder().decode(body));
-    return; // snapshot marker, skip
+    return;
   } catch {
     // binary Yjs update
   }
@@ -259,8 +198,4 @@ function applyDiff(ytext: Y.Text, oldVal: string, newVal: string) {
 
   if (deleteCount > 0) ytext.delete(start, deleteCount);
   if (insertText) ytext.insert(start, insertText);
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
 }
