@@ -7,13 +7,26 @@
 }
 
 :root {
-  --bg: #111;
-  --fg: #e0e0e0;
-  --bar-bg: #1a1a1a;
-  --bar-border: #333;
-  --accent: #888;
-  --btn-bg: #2a2a2a;
-  --btn-hover: #3a3a3a;
+  --bg: #fafafa;
+  --fg: #1a1a1a;
+  --bar-bg: #f0f0f0;
+  --bar-border: #d0d0d0;
+  --accent: #666;
+  --btn-bg: #e4e4e4;
+  --btn-hover: #d4d4d4;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111;
+    --fg: #e0e0e0;
+    --bar-bg: #1a1a1a;
+    --bar-border: #333;
+    --accent: #888;
+    --btn-bg: #2a2a2a;
+    --btn-hover: #3a3a3a;
+  }
 }
 
 html,
@@ -22,6 +35,24 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+  scrollbar-color: var(--bar-border) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bar-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
 }
 
 #editor {
