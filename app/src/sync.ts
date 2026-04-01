@@ -42,7 +42,7 @@ export async function startSync(
   const appendSess = await stream.appendSession();
   const producer = new Producer(
     new BatchTransform({ lingerDurationMillis: FLUSH_DEBOUNCE_MS }),
-    appendSess,
+    appendSess
   );
 
   let suppressLocal = false;
@@ -54,7 +54,9 @@ export async function startSync(
     pendingCount++;
     onStatus("Saving...");
     try {
-      const ticket = await producer.submit(AppendRecord.bytes({ body: update }));
+      const ticket = await producer.submit(
+        AppendRecord.bytes({ body: update })
+      );
       await ticket.ack();
     } catch {
       onStatus("Offline");
@@ -94,6 +96,8 @@ export async function startSync(
   }
 
   textarea.value = text.toString();
+  textarea.scrollTop = 0;
+  textarea.selectionStart = textarea.selectionEnd = 0;
   onTextChange(text.toString());
 
   let readSess: ReadSession<"bytes"> | null = null;
@@ -108,7 +112,7 @@ export async function startSync(
             start: { from: { seqNum: nextReadSeqNum }, clamp: true },
             stop: { waitSecs: 30 },
           },
-          { as: "bytes" },
+          { as: "bytes" }
         );
         for await (const rec of readSess) {
           if (!tailActive) break;
